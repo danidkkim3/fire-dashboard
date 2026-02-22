@@ -10,7 +10,7 @@ class AppSettings:
     theme: str = "light"
     currency_symbol: str = "₩"
     chart_dpi: int = 144
-    current_age: int = 30
+    birthday: str = ""          # ISO format: YYYY-MM-DD
     net_worth_history: list = field(default_factory=list)
     custom_colors: dict = field(default_factory=dict)
 
@@ -21,7 +21,7 @@ class AppSettings:
             "theme": self.theme,
             "currency_symbol": self.currency_symbol,
             "chart_dpi": self.chart_dpi,
-            "current_age": self.current_age,
+            "birthday": self.birthday,
             "net_worth_history": self.net_worth_history,
             "custom_colors": self.custom_colors,
         }
@@ -34,7 +34,7 @@ class AppSettings:
             theme=data.get("theme", "light"),
             currency_symbol=data.get("currency_symbol", "₩"),
             chart_dpi=int(data.get("chart_dpi", 144)),
-            current_age=int(data.get("current_age", 30)),
+            birthday=data.get("birthday", ""),
             net_worth_history=list(data.get("net_worth_history", [])),
             custom_colors=dict(data.get("custom_colors", {})),
         )

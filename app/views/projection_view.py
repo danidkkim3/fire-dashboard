@@ -9,6 +9,17 @@ from app.utils.formatting import fmt
 PROJECTION_MONTHS = 360   # 30 years
 
 
+def _age_from_birthday(birthday_str: str) -> int | None:
+    """Return exact age in years from an ISO birthday string, or None if invalid."""
+    try:
+        bday = date.fromisoformat(birthday_str.strip())
+        today = date.today()
+        age = today.year - bday.year - ((today.month, today.day) < (bday.month, bday.day))
+        return age if 0 <= age <= 120 else None
+    except ValueError:
+        return None
+
+
 class ProjectionView(BaseView):
     def build(self) -> None:
         p = self._app.palette
@@ -30,36 +41,42 @@ class ProjectionView(BaseView):
             font=ctk.CTkFont(size=11), text_color=p["subtext"],
         ).pack(side="left", padx=(16, 0))
 
-        # age input (right-aligned in header)
-        age_frame = ctk.CTkFrame(header, fg_color="transparent")
-        age_frame.pack(side="right")
-        ctk.CTkLabel(age_frame, text="Your age",
+        # birthday input (right-aligned in header)
+        bday_frame = ctk.CTkFrame(header, fg_color="transparent")
+        bday_frame.pack(side="right")
+        ctk.CTkLabel(bday_frame, text="Birthday",
                      font=ctk.CTkFont(size=12), text_color=p["subtext"],
                      ).pack(side="left", padx=(0, 6))
-        self._age_entry = ctk.CTkEntry(
-            age_frame, width=56, height=30,
+        self._bday_entry = ctk.CTkEntry(
+            bday_frame, width=110, height=30,
             fg_color=p["card"], border_color=p["border"], text_color=p["text"],
             font=ctk.CTkFont(size=13),
+            placeholder_text="YYYY-MM-DD",
             justify="center",
         )
-        self._age_entry.insert(0, str(self._app.settings.current_age))
-        self._age_entry.pack(side="left")
-        self._age_entry.bind("<KeyRelease>", lambda _: self._on_age_key())
-        self._age_entry.bind("<FocusOut>",   lambda _: self._commit_age())
+        self._bday_entry.pack(side="left")
+        self._bday_entry.bind("<KeyRelease>", lambda _: self._on_bday_key())
+        self._bday_entry.bind("<FocusOut>",   lambda _: self._commit_bday())
+
+        # computed age label
+        self._age_lbl = ctk.CTkLabel(
+            bday_frame, text="", width=60,
+            font=ctk.CTkFont(size=12), text_color=p["subtext"],
+        )
+        self._age_lbl.pack(side="left", padx=(8, 0))
 
         # chart
         self._chart = ProjectionChart(self, app=self._app)
         self._chart.grid(row=1, column=0, sticky="nsew", padx=24, pady=16)
 
-        # stats row — 4 columns now (added Age at FIRE)
+        # stats row
         self._stats_frame = ctk.CTkFrame(self, fg_color=p["card"], corner_radius=12)
         self._stats_frame.grid(row=2, column=0, sticky="ew", padx=24, pady=(0, 24))
         for i in range(4):
             self._stats_frame.grid_columnconfigure(i, weight=1)
 
         self._stat_labels: list[ctk.CTkLabel] = []
-        stat_titles = ["Est. Years to FIRE", "FIRE Date", "Age at FIRE", "Monthly Income at FIRE"]
-        for i, lbl in enumerate(stat_titles):
+        for i, lbl in enumerate(["Est. Years to FIRE", "FIRE Date", "Age at FIRE", "Monthly Income at FIRE"]):
             frame = ctk.CTkFrame(self._stats_frame, fg_color="transparent")
             frame.grid(row=0, column=i, padx=16, pady=12)
             ctk.CTkLabel(frame, text=lbl, font=ctk.CTkFont(size=11),
@@ -70,49 +87,57 @@ class ProjectionView(BaseView):
             val_lbl.pack()
             self._stat_labels.append(val_lbl)
 
-    def _on_age_key(self) -> None:
-        """Live-update the chart on every keystroke when the entry holds a valid age."""
-        try:
-            age = int(self._age_entry.get().strip())
-            if not (0 <= age <= 120):
-                return
-        except ValueError:
+    # ── birthday handlers ─────────────────────────────────────────────────
+
+    def _on_bday_key(self) -> None:
+        """Live-update chart and age label on each keystroke when date is valid."""
+        raw = self._bday_entry.get().strip()
+        age = _age_from_birthday(raw)
+        if age is None:
+            self._age_lbl.configure(text="")
             return
-        self._app.settings.current_age = age
-        self._refresh_chart()
+        self._age_lbl.configure(text=f"Age {age}")
+        self._app.settings.birthday = raw
+        self._refresh_chart(age)
 
-    def _commit_age(self) -> None:
-        """On FocusOut, validate and reset to last good value if entry is invalid."""
-        try:
-            age = int(self._age_entry.get().strip())
-            if not (0 <= age <= 120):
-                raise ValueError
-            self._app.settings.current_age = age
+    def _commit_bday(self) -> None:
+        """On FocusOut, save if valid; reset entry to last good value if not."""
+        raw = self._bday_entry.get().strip()
+        age = _age_from_birthday(raw)
+        if age is not None:
+            self._app.settings.birthday = raw
             self._app.save_data()
-        except ValueError:
-            self._age_entry.delete(0, "end")
-            self._age_entry.insert(0, str(self._app.settings.current_age))
+        else:
+            # restore last saved birthday (if any)
+            saved = self._app.settings.birthday
+            self._bday_entry.delete(0, "end")
+            if saved:
+                self._bday_entry.insert(0, saved)
+            self._age_lbl.configure(text="")
 
-    def _refresh_chart(self) -> None:
-        """Recalculate and redraw the chart using the current settings."""
+    # ── chart / stats ─────────────────────────────────────────────────────
+
+    def _refresh_chart(self, current_age: int | None) -> None:
         calc = self._app.get_calculator()
         sym = self._app.settings.currency_symbol
-        current_age = self._app.settings.current_age
         curve, fire_month = calc.project(months=PROJECTION_MONTHS)
         fn = calc.fire_number
         self._chart.refresh(curve, fn, fire_month, sym, current_age=current_age)
         self._update_stats(fire_month, fn, current_age, sym)
 
-    def _update_stats(self, fire_month: int, fn: float, current_age: int, sym: str) -> None:
+    def _update_stats(self, fire_month: int, fn: float,
+                      current_age: int | None, sym: str) -> None:
         p = self._app.palette
         if fire_month != -1:
             years = fire_month / 12
             fire_date = date.today() + timedelta(days=int(fire_month * 30.44))
-            age_at_fire = current_age + years
             income_at_fire = (fn * self._app.settings.safe_withdrawal_rate / 100) / 12
             self._stat_labels[0].configure(text=f"{years:.1f} yrs")
             self._stat_labels[1].configure(text=fire_date.strftime("%b %Y"))
-            self._stat_labels[2].configure(text=f"{age_at_fire:.0f}")
+            if current_age is not None:
+                self._stat_labels[2].configure(text=f"{current_age + years:.0f}")
+            else:
+                self._stat_labels[2].configure(text="—")
             self._stat_labels[3].configure(text=f"{fmt(income_at_fire, sym)}/mo")
         else:
             self._stat_labels[0].configure(text="> 30 yrs")
@@ -124,13 +149,16 @@ class ProjectionView(BaseView):
     def refresh(self) -> None:
         p = self._app.palette
         self.configure(fg_color=p["bg"])
-        current_age = self._app.settings.current_age
+        birthday = self._app.settings.birthday
 
-        # keep entry in sync (e.g. after settings import)
-        self._age_entry.delete(0, "end")
-        self._age_entry.insert(0, str(current_age))
+        # sync entry
+        self._bday_entry.delete(0, "end")
+        if birthday:
+            self._bday_entry.insert(0, birthday)
 
-        self._refresh_chart()
+        age = _age_from_birthday(birthday)
+        self._age_lbl.configure(text=f"Age {age}" if age is not None else "")
+        self._refresh_chart(age)
 
     def retheme(self) -> None:
         self._chart.retheme()

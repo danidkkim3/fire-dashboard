@@ -19,12 +19,6 @@ def main():
 
     from app.app import FIREApp
     app = FIREApp()
-    # Set tkinter scaling to 2.0 for Retina (must be done after window creation)
-    if platform.system() == "Darwin":
-        try:
-            app.tk.call("tk", "scaling", 2.0)
-        except Exception:
-            pass
     # Defer matplotlib font setup until after the window is visible
     def _late_init():
         from app.utils.formatting import setup_matplotlib_fonts

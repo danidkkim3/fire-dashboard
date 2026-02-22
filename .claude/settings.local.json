@@ -31,7 +31,11 @@
       "Bash(gh auth status)",
       "Bash(cat > /Users/dannykim/finance-tracker/.gitignore << 'EOF'\n.venv/\n__pycache__/\n*.pyc\n*.pyo\n.DS_Store\n*.egg-info/\ndist/\nbuild/\nEOF)",
       "Bash(git -C /Users/dannykim/finance-tracker init)",
-      "Bash(git -C /Users/dannykim/finance-tracker add .)"
+      "Bash(git -C /Users/dannykim/finance-tracker add .)",
+      "Bash(git -C /Users/dannykim/finance-tracker commit -m \"Initial commit — FIRE Dashboard\")",
+      "Bash(gh repo create danidkkim3/fire-dashboard --public --source=/Users/dannykim/finance-tracker --remote=origin --push)",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('app/models/settings.py'\\).read\\(\\)\\); ast.parse\\(open\\('app/views/projection_view.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(git add -A && git commit -m \"Fix blurry charts, add birthday input, 30yr projection, Apple light theme\" && git push origin main)"
     ]
   }
 }
